@@ -13,9 +13,15 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR/.." || exit 1
 
-# Load API key from .env
-if [ -f .env ]; then
+# Load API key from .env if not already set
+if [ -z "$OPENAI_API_KEY" ] && [ -f .env ]; then
   export $(grep -v '^#' .env | xargs)
+fi
+
+# Verify API key is available
+if [ -z "$OPENAI_API_KEY" ]; then
+  echo "ERROR: OPENAI_API_KEY is not set. Please set it in environment or .env file"
+  exit 1
 fi
 
 # Parse arguments

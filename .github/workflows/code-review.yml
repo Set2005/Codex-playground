@@ -30,6 +30,15 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
+          # Verify API key is set
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "ERROR: OPENAI_API_KEY is not set"
+            exit 1
+          fi
+          
+          # Export for child processes
+          export OPENAI_API_KEY
+          
           cd .reviews
           chmod +x review_last_commit.sh
           
