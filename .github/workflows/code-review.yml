@@ -22,9 +22,7 @@ jobs:
           
       - name: Install Codex CLI
         run: |
-          # Install Codex CLI (adjust based on actual installation method)
-          # This is a placeholder - replace with actual installation commands
-          npm install -g @openai/codex-cli || echo "Install codex CLI here"
+          npm install -g @openai/codex
           
       - name: Run Code Review
         id: review
