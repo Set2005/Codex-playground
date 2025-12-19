@@ -25,6 +25,12 @@ jobs:
         run: |
           npm install -g @openai/codex
           
+      - name: Login to Codex
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          echo "$OPENAI_API_KEY" | codex login --with-api-key
+          
       - name: Run Code Review
         id: review
         env:
