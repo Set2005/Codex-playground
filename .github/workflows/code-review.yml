@@ -1,0 +1,141 @@
+name: AI Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - main
+
+jobs:
+  code-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for proper diff analysis
+          
+      - name: Install Codex CLI
+        run: |
+          # Install Codex CLI (adjust based on actual installation method)
+          # This is a placeholder - replace with actual installation commands
+          npm install -g @openai/codex-cli || echo "Install codex CLI here"
+          
+      - name: Run Code Review
+        id: review
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          cd .reviews
+          chmod +x review_last_commit.sh
+          
+          # Determine which commit to review
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            COMMIT="${{ github.event.pull_request.head.sha }}"
+          else
+            COMMIT="HEAD"
+          fi
+          
+          ./review_last_commit.sh "$COMMIT" || echo "Review completed with warnings"
+          
+      - name: Post Review Results to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Read the review output
+            const reviewOutputPath = path.join(process.env.GITHUB_WORKSPACE, '.reviews', 'review_output.json');
+            
+            if (!fs.existsSync(reviewOutputPath)) {
+              console.log('No review output found');
+              return;
+            }
+            
+            const reviewData = JSON.parse(fs.readFileSync(reviewOutputPath, 'utf8'));
+            
+            // Create main PR comment with summary
+            let comment = '## 🤖 AI Code Review Results\n\n';
+            comment += `**Summary:** ${reviewData.summary}\n\n`;
+            
+            if (reviewData.reviews && reviewData.reviews.length > 0) {
+              comment += `### Issues Found: ${reviewData.reviews.length}\n\n`;
+              
+              // Group by severity
+              const bySeverity = reviewData.reviews.reduce((acc, review) => {
+                acc[review.severity] = acc[review.severity] || [];
+                acc[review.severity].push(review);
+                return acc;
+              }, {});
+              
+              const severityOrder = ['critical', 'high', 'medium', 'low'];
+              const severityEmoji = {
+                'critical': '🔴',
+                'high': '🟠', 
+                'medium': '🟡',
+                'low': '🟢'
+              };
+              
+              for (const severity of severityOrder) {
+                if (bySeverity[severity]) {
+                  comment += `\n#### ${severityEmoji[severity]} ${severity.toUpperCase()} (${bySeverity[severity].length})\n\n`;
+                  
+                  for (const review of bySeverity[severity]) {
+                    comment += `**${review.file}** (Lines ${review.line_start}-${review.line_end})\n`;
+                    comment += `- **Category:** ${review.category}\n`;
+                    comment += `- **Message:** ${review.message}\n`;
+                    if (review.suggestion) {
+                      comment += `- **Suggestion:**\n${review.suggestion}\n`;
+                    }
+                    comment += '\n';
+                  }
+                }
+              }
+            } else {
+              comment += '✅ No issues found! Code looks good.\n';
+            }
+            
+            // Post main comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+            
+            // Optionally post inline comments on specific lines
+            if (reviewData.reviews && reviewData.reviews.length > 0) {
+              for (const review of reviewData.reviews) {
+                try {
+                  await github.rest.pulls.createReviewComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: context.issue.number,
+                    body: `**[${review.severity.toUpperCase()}] ${review.category}**\n\n${review.message}${review.suggestion ? '\n\n**Suggestion:**\n' + review.suggestion : ''}`,
+                    commit_id: '${{ github.event.pull_request.head.sha }}',
+                    path: review.file,
+                    line: review.line_end,
+                    side: 'RIGHT'
+                  });
+                } catch (error) {
+                  console.log(`Could not post inline comment for ${review.file}:${review.line_end}: ${error.message}`);
+                }
+              }
+            }
+            
+      - name: Upload Review Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-review-results
+          path: .reviews/review_output.json
+          retention-days: 30
+
