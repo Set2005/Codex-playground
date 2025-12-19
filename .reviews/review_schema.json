@@ -12,7 +12,7 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["file", "line_start", "line_end", "severity", "category", "message"],
+        "required": ["file", "line_start", "line_end", "severity", "category", "message", "suggestion"],
         "additionalProperties": false,
         "properties": {
           "file": {
