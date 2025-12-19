@@ -1,6 +1,10 @@
 name: AI Code Review
 
 on:
+  # NOTE: Using 'pull_request' means fork PRs won't have access to secrets
+  # and will fail. For fork PRs, use 'pull_request_target' BUT be aware
+  # this gives fork PRs access to secrets, which is a security risk.
+  # For a personal repo, 'pull_request' is safer.
   pull_request:
     types: [opened, synchronize, reopened]
   push:
@@ -29,7 +33,8 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          echo "$OPENAI_API_KEY" | codex login --with-api-key
+          # Pipe API key directly without echo to avoid process exposure
+          printf '%s\n' "$OPENAI_API_KEY" | codex login --with-api-key
           
       - name: Run Code Review
         id: review
